@@ -5,3 +5,4 @@
 /lake-packages
 /SciLean/Doodle/
 *.lean#
+lakefile.olean
