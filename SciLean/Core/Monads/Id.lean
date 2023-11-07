@@ -3,13 +3,13 @@ import SciLean.Core.Monads.RevDerivMonad
 
 namespace SciLean
 
-variable 
+variable
   {K : Type _} [IsROrC K]
 
 instance [Vec K X] : Vec K (Id X) := by unfold Id; infer_instance
 instance [SemiInnerProductSpace K X] : SemiInnerProductSpace K (Id X) := by unfold Id; infer_instance
 -- instance [FinVec ι K X] : SemiInnerProductSpace K (Id X) := by unfold Id; infer_instance
-  
+
 noncomputable
 instance : FwdDerivMonad K Id Id where
   fwdDerivM f := fwdCDeriv K f
@@ -19,10 +19,10 @@ instance : FwdDerivMonad K Id Id where
   fwdDerivM_pair y := by intros; simp; ftrans
   IsDifferentiableM_pure := by simp[pure]
   IsDifferentiableM_bind := by simp[bind]; fprop
-  IsDifferentiableM_pair y := 
-    by 
+  IsDifferentiableM_pair y :=
+    by
       intros; simp[bind]; -- fprop something goes wrong where :(
-      have h : IsDifferentiable K (fun x : _ => (x, y x)) := by fprop 
+      have h : IsDifferentiable K (fun x : _ => (x, y x)) := by fprop
       apply h
 
 
@@ -31,14 +31,14 @@ instance : RevDerivMonad K Id Id where
   revDerivM f := revCDeriv K f
   HasAdjDiffM f := HasAdjDiff K f
   revDerivM_pure f := by simp[pure]
-  revDerivM_bind := by intros; simp; ftrans
+  revDerivM_bind := by intros; simp; ftrans; rfl
   revDerivM_pair y := by intros; simp; ftrans
   HasAdjDiffM_pure := by simp[pure]
   HasAdjDiffM_bind := by simp[bind]; fprop
-  HasAdjDiffM_pair y := 
-    by 
+  HasAdjDiffM_pair y :=
+    by
       intros; simp[bind]; -- fprop something goes wrong where :(
-      have h : HasAdjDiff K (fun x : _ => (x, y x)) := by fprop 
+      have h : HasAdjDiff K (fun x : _ => (x, y x)) := by fprop
       apply h
 
 
@@ -48,7 +48,7 @@ open SciLean
 
 section OnVec
 
-variable 
+variable
   {K : Type _} [IsROrC K]
   {X : Type} [Vec K X]
   {Y : Type} [Vec K Y]
@@ -70,7 +70,7 @@ end OnVec
 
 section OnSemiInnerProductSpace
 
-variable 
+variable
   {K : Type _} [IsROrC K]
   {X : Type} [SemiInnerProductSpace K X]
   {Y : Type} [SemiInnerProductSpace K Y]
