@@ -44,7 +44,7 @@ lean_exe MNISTClassifier where
 meta if get_config? doc = some "dev" then -- do not download and build doc-gen4 by default
 require «doc-gen4» from git "https://github.com/leanprover/doc-gen4" @ "master"
 
-require mathlib from git "https://github.com/leanprover-community/mathlib4" @ "81dd376a02781030ead59ee35ca5334a7fccc527"
+require mathlib from git "https://github.com/leanprover-community/mathlib4" @ "3006ba7ee7c11894e70abf7198a1efc24e9c4aad"
 
 set_option linter.unusedVariables false
 
