@@ -1,6 +1,11 @@
 import SciLean.Core.FunctionPropositions.IsDifferentiable 
 import SciLean.Core.FunctionPropositions.IsDifferentiableAt
+import SciLean.Core.FunctionPropositions.IsLinearMap
+import SciLean.Core.FunctionPropositions.IsSmoothLinearMap
 import SciLean.Core.NotationOverField
+import SciLean.Core.Simp
+
+import SciLean.Core.Meta.GenerateLinearMapSimp
 
 import SciLean.Tactic.FTrans.Basic
 
@@ -13,18 +18,24 @@ variable
   {X : Type _} [Vec K X]
   {Y : Type _} [Vec K Y]
   {Z : Type _} [Vec K Z]
+  {W : Type _} [Vec K W]
   {ι : Type _} [EnumType ι]
   {E : ι → Type _} [∀ i, Vec K (E i)]
 
 noncomputable
 def cderiv (f : X → Y) (x dx : X) : Y := Curve.deriv (fun t : K => f (x + t•dx)) 0
 
---@[ftrans_unfold]
+@[ftrans_simp]
 noncomputable
 def scalarCDeriv (f : K → X) (t : K) : X := cderiv K f t 1
 
+
 -- Basic identities ------------------------------------------------------------
 --------------------------------------------------------------------------------
+
+variable {K}
+theorem cderiv_of_linear (f : X → Y) (hf : IsSmoothLinearMap K f)
+  : cderiv K f = fun x dx => f dx := sorry_proof
 
 @[simp, ftrans_simp]
 theorem cderiv_apply
@@ -33,11 +44,19 @@ theorem cderiv_apply
     =
     cderiv K (fun x' => f x' y) x dx := sorry_proof
 
-@[simp, ftrans_simp]
-theorem cderiv_zero
+@[fprop] 
+theorem cderiv.arg_dx.IsLinearMap_rule_simple
   (f : X → Y) (x : X)
-  : cderiv K f x 0 = 0 := by sorry_proof
+  : IsLinearMap K (fun dx => cderiv K f x dx) := sorry_proof
 
+#generate_linear_map_simps SciLean.cderiv.arg_dx.IsLinearMap_rule_simple
+
+@[fprop]
+theorem cderiv.arg_dx.IsLinearMap_rule
+  (f : X → Y) (x : X) (dx : W → X) (hdx : IsLinearMap K dx)
+  : IsLinearMap K (fun w => cderiv K f x (dx w)) := by sorry_proof
+
+variable (K)
 
 -- Basic lambda calculus rules -------------------------------------------------
 --------------------------------------------------------------------------------
@@ -548,7 +567,7 @@ theorem HSMul.hSMul.arg_a0a1.cderiv_rule
 @[ftrans]
 theorem HDiv.hDiv.arg_a0a1.cderiv_rule_at
   (x : X) (f : X → K) (g : X → K) 
-  (hf : IsDifferentiableAt K f x) (hg : IsDifferentiableAt K g x) (hx : g x ≠ 0)
+  (hf : IsDifferentiableAt K f x) (hg : IsDifferentiableAt K g x) (hx : fpropParam (g x ≠ 0))
   : (cderiv K fun x => f x / g x) x
     =
     let k := f x
@@ -557,11 +576,10 @@ theorem HDiv.hDiv.arg_a0a1.cderiv_rule_at
       ((cderiv K f x dx) * k' - k * (cderiv K g x dx)) / k'^2 := 
 by sorry_proof
 
-
 @[ftrans]
 theorem HDiv.hDiv.arg_a0a1.cderiv_rule
   (f : X → K) (g : X → K) 
-  (hf : IsDifferentiable K f) (hg : IsDifferentiable K g) (hx : ∀ x, g x ≠ 0)
+  (hf : IsDifferentiable K f) (hg : IsDifferentiable K g) (hx : fpropParam (∀ x, g x ≠ 0))
   : (cderiv K fun x => f x / g x)
     =
     fun x => 
@@ -630,6 +648,49 @@ theorem SciLean.EnumType.sum.arg_f.cderiv_rule
     fun x dx => ∑ i, cderiv K (f · i) x dx :=
 by
   funext x; apply SciLean.EnumType.sum.arg_f.cderiv_rule_at f x (fun i => hf i x)
+
+
+-- d/ite -----------------------------------------------------------------------
+-------------------------------------------------------------------------------- 
+
+@[ftrans]
+theorem ite.arg_te.cderiv_rule
+  (c : Prop) [dec : Decidable c] (t e : X → Y)
+  : cderiv K (fun x => ite c (t x) (e x))
+    =
+    fun y =>
+      ite c (cderiv K t y) (cderiv K e y) := 
+by
+  induction dec
+  case isTrue h  => ext y; simp[h]
+  case isFalse h => ext y; simp[h]
+
+@[ftrans]
+theorem dite.arg_te.cderiv_rule
+  (c : Prop) [dec : Decidable c]
+  (t : c  → X → Y) (e : ¬c → X → Y)
+  : cderiv K (fun x => dite c (t · x) (e · x))
+    =
+    fun y =>
+      dite c (fun p => cderiv K (t p) y) 
+             (fun p => cderiv K (e p) y) := 
+by
+  induction dec
+  case isTrue h  => ext y; simp[h]
+  case isFalse h => ext y; simp[h]
+
+
+-- not sure about the differentiability condition on `e`
+theorem ite.arg_chte.cderiv_rule
+  (c : X → Prop) [dec : ∀ x, Decidable (c x)] (t e : X → Y)
+  (ht : ∀ x ∈ closure c, IsDifferentiableAt K t x) (he : ∀ x ∈ (interior c)ᶜ, IsDifferentiableAt K e x)
+  (hc : (∀ x, x ∈ frontier c → cderiv K t x = cderiv K e x))
+  : cderiv K (fun x => ite (c x) (t x) (e x))
+    =
+    fun y =>
+      ite (c y) (cderiv K t y) (cderiv K e y) := 
+by
+  sorry_proof
 
 
 --------------------------------------------------------------------------------
@@ -714,9 +775,8 @@ theorem SciLean.Norm2.norm2.arg_a0.cderiv_rule
 by
   funext x; apply SciLean.Norm2.norm2.arg_a0.cderiv_rule_at f x (hf x) 
 
-open Scalar in
 @[ftrans]
-theorem SciLean.norm₂.arg_x.cderiv_rule
+theorem SciLean.norm₂.arg_x.cderiv_rule_at
   (f : X → Y) (x : X)
   (hf : IsDifferentiableAt R f x) (hx : f x≠0)
   : cderiv R (fun x => ‖f x‖₂[R]) x
@@ -727,6 +787,21 @@ theorem SciLean.norm₂.arg_x.cderiv_rule
       ‖y‖₂[R]⁻¹ * ⟪dy,y⟫[R] :=
 by
   sorry_proof
+
+
+@[ftrans]
+theorem SciLean.norm₂.arg_x.cderiv_rule
+  (f : X → Y)
+  (hf : IsDifferentiable R f) (hx : fpropParam (∀ x, f x≠0))
+  : cderiv R (fun x => ‖f x‖₂[R])
+    =
+    fun x dx => 
+      let y := f x
+      let dy := cderiv R f x dx
+      ‖y‖₂[R]⁻¹ * ⟪dy,y⟫[R] :=
+by
+  funext x
+  rw [SciLean.norm₂.arg_x.cderiv_rule_at f x (hf x) (hx x)]
 
 
 end OverReals

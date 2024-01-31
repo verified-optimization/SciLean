@@ -5,6 +5,8 @@ import SciLean.Core.Objects.FinVec
 import SciLean.Tactic.FProp.Basic
 import SciLean.Tactic.FProp.Notation
 
+set_option linter.unusedVariables false
+
 variable {R X Y Z ι : Type _} {E : ι → Type _}
   [Semiring R] 
   [AddCommGroup X] [Module R X]
@@ -228,30 +230,25 @@ by
   sorry_proof
 
 
--- -- HMul.hMul ---------------------------------------------------------------------
--- -------------------------------------------------------------------------------- 
+-- HMul.hMul ---------------------------------------------------------------------
+-------------------------------------------------------------------------------- 
 
--- @[fprop]
--- theorem HMul.hMul.arg_a0.IsLinearMap_rule
---   (f : X → Y) (hf : IsLinearMap R f)
---   (y' : Y) 
---   : IsLinearMap R fun x => f x * y'
--- := 
---   by_morphism (ContinuousLinearMap.comp (ContinuousLinearMap.mul_right y') (mk' R f hf))
---   (by simp[ContinuousLinearMap.mul_right])
+@[fprop]
+theorem HMul.hMul.arg_a0.IsLinearMap_rule
+  (f : X → R) (hf : IsLinearMap R f)
+  (y' : R) 
+  : IsLinearMap R fun x => f x * y' := 
+by
+  sorry_proof
 
 
--- @[fprop]
--- theorem HMul.hMul.arg_a1.IsLinearMap_rule
---   {R : Type _} [CommSemiring R] 
---   {X : Type _} [TopologicalSpace X] [AddCommMonoid X] [Module R X]
---   {Y : Type _} [TopologicalSpace Y] [Semiring Y] [Algebra R Y] [TopologicalSemiring Y] 
---   (f : X → Y) (hf : IsLinearMap R f)
---   (y' : Y) 
---   : IsLinearMap R fun x => y' * f x
--- := 
---   by_morphism (ContinuousLinearMap.comp (ContinuousLinearMap.mul_left y') (mk' R f hf))
---   (by simp[ContinuousLinearMap.mul_left])
+@[fprop]
+theorem HMul.hMul.arg_a1.IsLinearMap_rule
+  (f : X → R) (hf : IsLinearMap R f)
+  (y' : R) 
+  : IsLinearMap R fun x => y' * f x := 
+by  
+  sorry_proof
 
 
 -- Smul.smul ---------------------------------------------------------------------

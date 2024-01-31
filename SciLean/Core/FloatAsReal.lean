@@ -8,9 +8,9 @@ instance : CommRing Float where
   zero_mul := by intros; apply isomorph.ext `FloatToReal; simp; ftrans; simp
   mul_zero := by intros; apply isomorph.ext `FloatToReal; simp; ftrans
   mul_comm := by intros; apply isomorph.ext `FloatToReal; simp; ftrans; rw[mul_comm]
-  left_distrib := by intros;  apply isomorph.ext `FloatToReal; simp; ftrans; simp; ftrans; simp; rw[mul_add]
-  right_distrib := by intros; apply isomorph.ext `FloatToReal; simp; ftrans; simp; ftrans; simp; rw[add_mul]
-  mul_one := by intros; apply isomorph.ext `FloatToReal; simp; ftrans; simp
+  left_distrib := by intros;  apply isomorph.ext `FloatToReal; simp; ftrans; simp; ftrans; rw[mul_add]
+  right_distrib := by intros; apply isomorph.ext `FloatToReal; simp; ftrans; simp; ftrans; rw[add_mul]
+  mul_one := by intros; apply isomorph.ext `FloatToReal; simp; ftrans
   one_mul := by intros; apply isomorph.ext `FloatToReal; simp; ftrans; simp
   npow n x := x.pow (n.toFloat)  --- TODO: change this implementation
   npow_zero n := sorry_proof
@@ -152,6 +152,9 @@ instance : RealScalar Float where
 
   imag _ := 0
   imag_def := by intros; simp
+
+  sin x := x.sin
+  sin_def := sorry_proof
   
   cos x := x.cos
   cos_def := sorry_proof
@@ -159,8 +162,23 @@ instance : RealScalar Float where
   tan x := x.tan
   tan_def := sorry_proof
 
+  asin x := x.asin
+  asin_def := sorry_proof
+  
+  acos x := x.acos
+  acos_def := sorry_proof
+
+  atan x := x.atan
+  atan_def := sorry_proof
+
   exp x := x.exp
   exp_def := sorry_proof
+
+  log x := x.log
+  log_def := sorry_proof
+
+  tanh x := x.tanh
+  tanh_def := sorry_proof
 
   sqrt x := x.sqrt
   sqrt_def := sorry_proof
@@ -171,6 +189,15 @@ instance : RealScalar Float where
   abs x := x.abs
   abs_def := sorry_proof
   
+  le_total := by sorry_proof
+  decidableLE := inferInstance
+  decidableEq := inferInstance
+  decidableLT := inferInstance
+
+  min_def := by sorry_proof 
+  max_def := by sorry_proof
+  compare x y := compare x y
+  compare_eq_compareOfLessAndEq := by sorry_proof
 
 
 open ComplexConjugate
@@ -180,7 +207,7 @@ theorem conj_float  (a : Float)
 
 @[simp]
 theorem re_float  (a : Float)
-  : IsROrC.re a = a := by simp[Coe.coe]; sorry_proof
+  : IsROrC.re a = a := by sorry_proof
 
 open ComplexConjugate
 @[simp]

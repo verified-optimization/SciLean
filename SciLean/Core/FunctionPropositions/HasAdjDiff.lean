@@ -4,6 +4,8 @@ import SciLean.Core.FunctionPropositions.HasAdjDiffAt
 
 import SciLean.Core.FunctionTransformations.CDeriv
 
+import Lean.Meta.Tactic.Assumption
+
 set_option linter.unusedVariables false
 
 namespace SciLean
@@ -152,8 +154,15 @@ def fpropExt : FPropExt where
     }
     FProp.tryTheorem? e thm (fun _ => pure none)
 
-  discharger e := 
-    FProp.tacticToDischarge (Syntax.mkLit ``Lean.Parser.Tactic.assumption "assumption") e
+  discharger e := do
+    if let .some prf ← Lean.Meta.findLocalDeclWithType? e then
+      return .some (.fvar prf)
+    else
+      if e.isAppOf ``fpropParam then
+        trace[Meta.Tactic.fprop.unsafe] s!"discharging with sorry: {← ppExpr e}"
+        return .some <| ← mkAppOptM ``sorryProofAxiom #[e.appArg!]
+      else
+        return none
 
 
 -- register fderiv
@@ -338,7 +347,7 @@ by
 @[fprop]
 def HDiv.hDiv.arg_a0a1.HasAdjDiff_rule
   (f : X → K) (g : X → K) 
-  (hf : HasAdjDiff K f) (hg : HasAdjDiff K g) (hx : ∀ x, g x ≠ 0)
+  (hf : HasAdjDiff K f) (hg : HasAdjDiff K g) (hx : fpropParam (∀ x, g x ≠ 0))
   : HasAdjDiff K (fun x => f x / g x) := 
 by 
   have ⟨_,_⟩ := hf
@@ -351,7 +360,7 @@ by
 
 @[fprop]
 def HPow.hPow.arg_a0.HasAdjDiff_rule
-  (n : Nat) (x : X) (f : X → K) (hf : HasAdjDiff K f)
+  (n : Nat) (f : X → K) (hf : HasAdjDiff K f)
   : HasAdjDiff K (fun x => f x ^ n) := 
 by 
   have ⟨_,_⟩ := hf
@@ -368,6 +377,31 @@ theorem SciLean.EnumType.sum.arg_f.HasAdjDiff_rule
 by
   have := fun i => (hf i).1
   constructor; fprop; ftrans; fprop
+
+-- d/ite -----------------------------------------------------------------------
+-------------------------------------------------------------------------------- 
+
+@[fprop]
+theorem ite.arg_te.HasAdjDiff_rule
+  (c : Prop) [dec : Decidable c] (t e : X → Y)
+  (ht : HasAdjDiff K t) (he : HasAdjDiff K e)
+  : HasAdjDiff K (fun x => ite c (t x) (e x)) :=
+by
+  induction dec
+  case isTrue h  => simp[ht,h]
+  case isFalse h => simp[he,h]
+
+@[fprop]
+theorem dite.arg_te.HasAdjDiff_rule
+  (c : Prop) [dec : Decidable c]
+  (t : c → X → Y) (e : ¬c → X → Y)
+  (ht : ∀ h, HasAdjDiff K (t h)) (he : ∀ h, HasAdjDiff K (e h))
+  : HasAdjDiff K (fun x => dite c (t · x) (e · x)) :=
+by
+  induction dec
+  case isTrue h  => simp[ht,h]
+  case isFalse h => simp[he,h]
+
 
 
 --------------------------------------------------------------------------------
@@ -404,6 +438,16 @@ by
   constructor; fprop; ftrans; fprop
 
 
+@[fprop]
+theorem SciLean.norm₂.arg_x.HasAdjDiff_rule
+  (f : X → Y)
+  (hf : HasAdjDiff R f) (hfz : fpropParam <| ∀ x, f x ≠ 0)
+  : HasAdjDiff R fun x => ‖f x‖₂[R] :=
+by 
+  have ⟨_,_⟩ := hf
+  constructor; sorry_proof; sorry_proof
+
+
 end InnerProductSpace
 
 
@@ -411,7 +455,7 @@ end InnerProductSpace
 --------------------------------------------------------------------------------
 
 @[fprop]
-theorem SciLean.semiAdjoint.arg_a3.IsDifferentiable_rule {W : Type _} [Vec K W]
+theorem SciLean.semiAdjoint.arg_y.IsDifferentiable_rule {W : Type _} [Vec K W]
   (f : X → Y) (a0 : W → Y) (ha0 : IsDifferentiable K a0)
   : IsDifferentiable K (fun w => semiAdjoint K f (a0 w)) := 
 by
@@ -421,7 +465,7 @@ by
   | isFalse h => simp[h]; fprop
 
 @[fprop]
-theorem SciLean.semiAdjoint.arg_a3.HasAdjDiff_rule
+theorem SciLean.semiAdjoint.arg_y.HasAdjDiff_rule
   (f : X → Y) (a0 : W → Y) (ha0 : HasAdjDiff K a0)
   : HasAdjDiff K (fun w => semiAdjoint K f (a0 w)) := 
 by

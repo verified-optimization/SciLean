@@ -1,18 +1,43 @@
 import SciLean.Core.FunctionTransformations.RevCDeriv
+import SciLean.Core.Notation.Autodiff
 import SciLean.Core.Notation.CDeriv
+
 
 namespace SciLean.NotationOverField
 
-scoped syntax "∇ " term:66 : term
+scoped syntax (name:=gradNotation1) "∇ " term:66 : term
 scoped syntax "∇ " diffBinder ", " term:66 : term
 scoped syntax "∇ " "(" diffBinder ")" ", " term:66 : term
 
+scoped syntax "∇! " term:66 : term
+scoped syntax "∇! " diffBinder ", " term:66 : term
+scoped syntax "∇! " "(" diffBinder ")" ", " term:66 : term
+
+
 open Lean Elab Term Meta in
-elab_rules : term
-| `(∇ $f) => do
+elab_rules (kind:=gradNotation1) : term
+| `(∇ $f $x $xs*) => do
   let K := mkIdent (← currentFieldName.get)
   let KExpr ← elabTerm (← `($K)) none
-  let fExpr ← elabTerm f none
+  let X ← inferType (← elabTerm x none)
+  let Y ← mkFreshTypeMVar
+  let XY ← mkArrow X Y
+  -- Y might also be infered by the function `f`
+  let fExpr ← withoutPostponing <| elabTermEnsuringType f XY false
+  let .some (_,Y) := (← inferType fExpr).arrow? 
+    | return ← throwUnsupportedSyntax
+  if (← isDefEq KExpr Y) then
+    elabTerm (← `(scalarGradient $K $f $x $xs*)) none false
+  else
+    elabTerm (← `(gradient $K $f $x $xs*)) none false
+
+| `(∇ $f) => do
+  let K := mkIdent (← currentFieldName.get)
+  let X ← mkFreshTypeMVar
+  let Y ← mkFreshTypeMVar
+  let XY ← mkArrow X Y
+  let KExpr ← elabTerm (← `($K)) none
+  let fExpr ← withoutPostponing <| elabTermEnsuringType f XY false
   if let .some (_,Y) := (← inferType fExpr).arrow? then
     if (← isDefEq KExpr Y) then
       elabTerm (← `(scalarGradient $K $f)) none false
@@ -21,16 +46,18 @@ elab_rules : term
   else
     throwUnsupportedSyntax
 
--- in this case we do not want to call scalarGradient
-| `(∇ $x:ident := $val:term; $codir:term, $b) => do
-  let K := mkIdent (← currentFieldName.get)
-  elabTerm (← `(gradient $K (fun $x => $b) $val $codir)) none false
-
 macro_rules
 | `(∇ $x:ident, $f)              => `(∇ fun $x => $f)
 | `(∇ $x:ident : $type:term, $f) => `(∇ fun $x : $type => $f)
-| `(∇ $x:ident := $val:term, $f) => `((∇ fun $x => $f) $val)
+| `(∇ $x:ident := $val:term, $f) => `(∇ (fun $x => $f) $val)
 | `(∇ ($b:diffBinder), $f)       => `(∇ $b, $f)
+
+macro_rules
+| `(∇! $f)                        => `((∇ $f) rewrite_by ftrans; ftrans; ftrans)
+| `(∇! $x:ident, $f)              => `(∇! fun $x => $f)
+| `(∇! $x:ident : $type:term, $f) => `(∇! fun $x : $type => $f)
+| `(∇! $x:ident := $val:term, $f) => `(∇! (fun $x => $f) $val)
+| `(∇! ($b:diffBinder), $f)       => `(∇! $b, $f)
 
 @[app_unexpander gradient] def unexpandGradient : Lean.PrettyPrinter.Unexpander
 

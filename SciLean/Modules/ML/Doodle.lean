@@ -1,72 +1,95 @@
 import SciLean
 import SciLean.Core.Meta.GenerateRevCDeriv'
-import SciLean.Util.Profile
-import SciLean.Tactic.LSimp2.Main
+import SciLean.Modules.ML.DenseLayer
 
--- import SciLean.Data.DataArray
--- import SciLean.Data.Prod
--- import SciLean.Util.Profile
+open SciLean ML
 
 -- #profile_this_file
 
-namespace SciLean
-
-
 variable 
-  -- {R : Type _} [RealScalar R]
-  {K : Type} [RealScalar K]
-  {W : Type} [Vec K W]
+  {R : Type} [RealScalar R]
+  [PlainDataType R]
 
-set_default_scalar K
-
-variable {α β κ ι : Type} [Index.{0,0,0} α]  [Index.{0,0,0} β] [Index.{0,0,0} κ] [Index.{0,0,0} ι] [PlainDataType K] [PlainDataType R]
-
-variable (κ)
-def denseLazy (weights : κ → ι → K) (bias : κ → K) (x : ι → K) (j : κ) : K := 
-  ∑ i, weights j i * x i + bias j
-variable {κ}
+set_default_scalar R
 
 
-example : SemiInnerProductSpace K ((κ → ι → K) × (κ → K) × (ι → K)) := by infer_instance
+variable (x : R^(Idx 20)) 
 
-set_option profiler true 
-set_option profiler.threshold 10
+-- set_option profiler true in
 
-set_option trace.Meta.Tactic.simp.rewrite true in
-#generate_revCDeriv' denseLazy weights bias x | j
-  prop_by unfold denseLazy; fprop
-  trans_by 
-    unfold denseLazy
-    ftrans only
-    lsimp (config := {zeta := false})
+#check (revCDeriv R fun (w,w',w'',b,b',b'') => 
+  x |> dense (Idx 5) w' b'
+    |> dense (Idx 10) w b
+    |> dense (Idx 20) w'' b'')
+  rewrite_by
+    autodiff
 
 
-variable (κ)
-def dense (weights : DataArrayN K (κ×ι)) (bias : K^κ) (x : K^ι) : K^κ := 
-  -- ⊞ j => ∑ i, weights[(j,i)] * x[i] + bias[j]
-  ⊞ j => denseLazy κ (fun j i => weights[(j,i)]) (fun j => bias[j]) (fun i => x[i]) j
-variable {κ}
-
-#generate_revCDeriv' dense weights bias x
-  prop_by unfold dense; fprop
-  trans_by unfold dense; ftrans only
-
-#eval 0
-
-
-#check dense.arg_weightsbiasx.revCDeriv_rule
-
-variable (x : K^(Idx 20)) 
-
-
-#check (revCDeriv K fun (w,w',w'',w''',b,b',b'',b''') => 
+#check (revCDeriv R fun (w,w',w'',w''',w'''',b,b',b'',b''',b'''') => 
   x |> dense (Idx 5) w' b'
     |> dense (Idx 10) w b
     |> dense (Idx 20) w'' b''
-    |> dense (Idx 20) w''' b''')
+    |> dense (Idx 20) w''' b'''
+    |> dense (Idx 30) w'''' b'''')
   rewrite_by
     ftrans only
-    lsimp (config := {zeta:=false}) only
+    ftrans
+    -- lsimp (config := {zeta:=false, singlePass:=true}) only
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#exit
+
+example (a : Nat) (b : Nat) 
+  : (b,a,a,0) + (b,a,a,a,a,a,a,a,a,b,b) + 0 = (b+b,a+a,a+a,a,a,a,a,a,a,b,b) := by simp
+
+example (a : K)
+  : (a,0) + (a,a,a,a,a,a,a,a,a,a,a) + 0 = (a+a,a,a,a,a,a,a,a,a,a,a) := by simp
+
+example (a : K ^ Idx 10) (b : K ^ Idx 20) 
+  : (a,0) + (a,a,a,a,a,a,a,a,a,b,b) + 0 = (a+a,a,a,a,a,a,a,a,a,b,b) := by simp
+
+
+set_option trace.Meta.Tactic.simp.discharge true in
+example (a : K ^ Idx 10) (b : K ^ Idx 20) 
+  : (b,a,a,0) + (b,a,a,a,a,a,a,a,a,b,b) + 0 = (b+b,a+a,a+a,a,a,a,a,a,a,b,b) := by simp
+
+
+set_option trace.Meta.Tactic.simp.discharge true in
+example (a : K ^ Idx 10)
+  : (a,a,a,0) + (a,a,a,a,a,a,a,a,a,a,a) = (a+a,a+a,a+a,a,a,a,a,a,a,a,a) := by simp
+
+
+variable (a : Nat)
+#check 
+  (a + 
+    (a + d
+    let x := a + a
+    x))
+  rewrite_by
+    lsimp (config := {zeta := false, singlePass := true})
 
 #exit
 

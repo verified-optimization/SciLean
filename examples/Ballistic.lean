@@ -1,41 +1,69 @@
-
 import SciLean
-import SciLean.Functions.OdeSolve
-import SciLean.Functions.GradientDescent
-import SciLean.Solver.Solver 
-import SciLean.Core.UnsafeAD
-import SciLean.Tactic.LetUtils
-import SciLean.Tactic.LetEnter
-import SciLean.Tactic.Basic
-import SciLean.Profile
+
+import SciLean.Core.Functions.ArgMinMax
+import SciLean.Modules.SolversAndOptimizers.GradientDescent
 
 open SciLean
 
-def g : ℝ×ℝ := (0, -9.81)
+open NotationOverField 
+set_default_scalar Float
 
-def ballisticMotion (x v : ℝ×ℝ) := (v, g - (5 + ‖v‖) • v)
 
-function_properties ballisticMotion (x v : ℝ×ℝ)
-argument (x,v) [UnsafeAD]
-  def ∂, def ∂†, def ℛ
+syntax (name:=arrayTypeLiteral') (priority:=high) " ⊞[" term,* "] " : term
 
-#print ballisticMotion.arg_xv.differential
 
-approx aimToTarget (v₀ : ℝ×ℝ) (optimizationRate : ℝ) := 
-  λ (T : ℝ) (target : ℝ×ℝ) =>
-  let shoot := λ (v : ℝ×ℝ) =>
-                 odeSolve (t₀ := 0) (x₀ := ((0:ℝ×ℝ),v)) (t := T)
-                   (f := λ (t : ℝ) (x,v) => ballisticMotion x v) |>.fst
-  shoot⁻¹ target
+def List.toArrayType (l : List α) {n : USize} (h : l.length = n.toNat) [PlainDataType α] : α^[n] := 
+  ⊞ i => l.get ⟨i.1.toNat,sorry_proof⟩
+
+open Lean Meta Elab Term Qq
+macro_rules 
+ | `(⊞[ $x:term, $xs:term,* ]) => do 
+   let n := Syntax.mkNumLit (toString (xs.getElems.size + 1))   
+   `(List.toArrayType [$x,$xs,*] (n:=$n) sorry_proof)
+  -- let n := Syntax.mkNumLit (toString xs.getElems.size)
+  -- `(term| ListN.toArrayType (arrayType #[$xs,*] $n (by rfl))
+
+-- @[app_unexpander Array.toArrayType] 
+-- def unexpandArrayToArrayType : Lean.PrettyPrinter.Unexpander
+--   | `($(_) #[$ys,*] $_*) =>     
+--     `(⊞[$ys,*])
+--   | _  => throw ()
+
+def g := ⊞[0.0, -9.81]
+
+def ballisticMotion (x v : Float^[2]) := (v, g - (5.0 + ‖v‖₂) • v)
+
+#generate_revDeriv ballisticMotion x v
+  prop_by unfold ballisticMotion; fprop
+  trans_by unfold ballisticMotion; ftrans
+
+
+noncomputable
+approx aimToTarget (v₀ : Float^[2]) (optimizationRate : Float) := 
+  λ (T : Float) (target : Float^[2]) =>
+  let shoot := λ (v : Float^[2]) =>
+                 odeSolve (t₀ := 0) (x₀ := ((0:Float^[2]),v)) (t := T)
+                   (f := λ (t : Float) (x,v) => ballisticMotion x v) |>.fst
+  Function.invFun shoot target
 by
-  clean_up
   
   -- reformulate inverse as minimization and apply gradient descent
   conv =>
-    enter [1,T,shoot,target]
-    rw [invFun_as_argmin _ _ sorry_proof]
+    enter [2,T,target,shoot]
+    rw [invFun_as_min_norm2 (R:=Float) _ _ sorry_proof]
     rw [argminFun.approx.gradientDescent v₀ optimizationRate]
   
+  approx_limit n := sorry_proof
+
+  unfold scalarGradient
+  set_option trace.Meta.Tactic.simp.discharge true in
+  set_option trace.Meta.Tactic.ftrans.step true in
+  set_option trace.Meta.Tactic.ftrans.theorems true in
+  set_option trace.Meta.Tactic.simp.unify true in
+  ftrans
+
+
+#exit  
   approx_limit 1; intro gdSteps
   clean_up
 

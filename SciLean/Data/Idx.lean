@@ -58,8 +58,17 @@ instance : HSub (Idx n) Int64 (Idx n) := ⟨λ x y => ⟨(x.1 - (y.1 + n))%n, so
 instance : VAdd Int64 (Idx n) := ⟨λ x y => y + x⟩
 
 def toFin {n} (i : Idx n) : Fin n.toNat := ⟨i.1.toNat, sorry_proof⟩
-def toFloat {n} (i : Idx n) : Float := i.1.toNat.toFloat
+def toFin' {n : Nat} (i : Idx n.toUSize) : Fin n := ⟨i.1.toNat, sorry_proof⟩
 
+@[extern c inline "(double)#1"]
+def _root_.USize.toFloat (n : USize) : Float := n.toNat.toFloat
+def toFloat {n} (i : Idx n) : Float := i.1.toFloat
+
+@[macro_inline]
+def cast (i : Idx n) (h : n = m) : Idx m := ⟨i.1, by rw[← h]; apply i.2⟩
+
+@[macro_inline]
+def cast' (i : Idx n) (h : m = n) : Idx m := ⟨i.1, by rw[h]; apply i.2⟩
 
 def shiftPos (x : Idx n) (s : USize) := x + s
 def shiftNeg (x : Idx n) (s : USize) := x - s
@@ -67,6 +76,14 @@ def shift (x : Idx n) (s : Int) :=
   match s with
   | .ofNat n => x.shiftPos n.toUSize
   | .negSucc n => x.shiftNeg (n+1).toUSize
+
+/-- Splits index `i : Idx (n*m)` into `(i / n, i % n)`-/
+def prodSplit (i : Idx (n*m)) : Idx n × Idx m := 
+  (⟨i.1 / n, sorry_proof⟩, ⟨i.1 % n, sorry_proof⟩)
+
+/-- Splits index `i : Idx (n*m)` into `(i / m, i % m)`-/
+def prodSplit' (i : Idx (n*m)) : Idx m × Idx n := 
+  (⟨i.1 % m, sorry_proof⟩, ⟨i.1 / m, sorry_proof⟩)
   
 -- This does not work as intended :(
 

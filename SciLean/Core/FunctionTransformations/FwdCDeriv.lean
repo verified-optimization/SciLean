@@ -22,6 +22,10 @@ variable
   {E : ι → Type _} [∀ i, Vec K (E i)]
 
 
+theorem fwdCDeriv_of_linear (f : X → Y) (hf : IsSmoothLinearMap K f)
+  : fwdCDeriv K f = fun x dx => (f x, f dx) := by unfold fwdCDeriv; simp [cderiv_of_linear _ hf]
+
+
 -- Basic lambda calculus rules -------------------------------------------------
 --------------------------------------------------------------------------------
 
@@ -556,6 +560,36 @@ by
   unfold fwdCDeriv; ftrans
 
 
+-- d/ite -----------------------------------------------------------------------
+-------------------------------------------------------------------------------- 
+
+@[ftrans]
+theorem ite.arg_te.fwdCDeriv_rule
+  (c : Prop) [dec : Decidable c] (t e : X → Y)
+  : fwdCDeriv K (fun x => ite c (t x) (e x))
+    =
+    fun y =>
+      ite c (fwdCDeriv K t y) (fwdCDeriv K e y) := 
+by
+  induction dec
+  case isTrue h  => ext y; simp[h]; simp[h]
+  case isFalse h => ext y; simp[h]; simp[h]
+
+@[ftrans]
+theorem dite.arg_te.fwdCDeriv_rule
+  (c : Prop) [dec : Decidable c]
+  (t : c  → X → Y) (e : ¬c → X → Y)
+  : fwdCDeriv K (fun x => dite c (t · x) (e · x))
+    =
+    fun y =>
+      dite c (fun p => fwdCDeriv K (t p) y) 
+             (fun p => fwdCDeriv K (e p) y) := 
+by
+  induction dec
+  case isTrue h  => ext y; simp[h]; simp[h]
+  case isFalse h => ext y; simp[h]; simp[h]
+
+
 --------------------------------------------------------------------------------
 
 section InnerProductSpace
@@ -595,10 +629,9 @@ theorem SciLean.Norm2.norm2.arg_a0.fwdCDeriv_rule
       let ydy := fwdCDeriv R f x dx
       (‖ydy.1‖₂²[R], 2 * ⟪ydy.2, ydy.1⟫[R]) := 
 by
-  -- simp_rw [← SemiInnerProductSpace.inner_norm2]
-  simp[fwdCDeriv]
+  unfold fwdCDeriv
   funext x dx
-  ftrans
+  ftrans; simp
 
 open Scalar in
 @[ftrans]
@@ -612,8 +645,8 @@ theorem SciLean.norm₂.arg_x.fwdCDeriv_rule
       let ynorm := ‖ydy.1‖₂[R]
       (ynorm, ynorm⁻¹ * ⟪ydy.2,ydy.1⟫[R]) :=
 by
-  simp[fwdCDeriv]
+  unfold fwdCDeriv
   funext dx
-  ftrans
+  ftrans; simp
 
 end InnerProductSpace

@@ -34,19 +34,31 @@ def revCDerivEval
   let ydf := revCDeriv K f x
   (ydf.1, ydf.2 dy)
 
---@[ftrans_unfold]
+@[ftrans_simp]
 noncomputable
 def gradient
   (f : X → Y) (x : X) : Y→X := (revCDeriv K f x).2
 
---@[ftrans_unfold]
+@[ftrans_simp]
 noncomputable
 def scalarGradient
   (f : X → K) (x : X) : X := (revCDeriv K f x).2 1
 
+@[simp, ftrans_simp]
+theorem revCDeriv_fst (f : X → Y) (x : X)
+  : (revCDeriv K f x).1 = f x :=
+by
+  rfl
+
+@[simp, ftrans_simp]
+theorem revCDeriv_snd_zero (f : X → Y) (x : X)
+  : (revCDeriv K f x).2 0 = 0 :=
+by
+  simp[revCDeriv]
+
 
 @[ftrans]
-theorem semiAdjoint.arg_a3.cderiv_rule
+theorem semiAdjoint.arg_y.cderiv_rule
   (f : X → Y) (a0 : W → Y) (ha0 : IsDifferentiable K a0)
   : cderiv K (fun w => semiAdjoint K f (a0 w))
     =
@@ -149,7 +161,9 @@ by
   have ⟨_,_⟩ := hf
   have ⟨_,_⟩ := hg
   unfold revCDeriv
-  funext _; ftrans; ftrans; rfl
+  funext _; ftrans; ftrans
+  rfl
+
 
 theorem comp_rule'
   (f : Y → Z) (g : X → Y)
@@ -626,7 +640,7 @@ by
 
 open Lean Meta Qq in
 def discharger (e : Expr) : SimpM (Option Expr) := do
-  withTraceNode `revCDeriv_discharger (fun _ => return s!"discharge {← ppExpr e}") do
+  withTraceNode `revDeriv_discharger (fun _ => return s!"discharge {← ppExpr e}") do
   let cache := (← get).cache
   let config : FProp.Config := {}
   let state  : FProp.State := { cache := cache }
@@ -635,10 +649,14 @@ def discharger (e : Expr) : SimpM (Option Expr) := do
   if proof?.isSome then
     return proof?
   else
-    -- if `fprop` fails try assumption
-    let tac := FTrans.tacticToDischarge (Syntax.mkLit ``Lean.Parser.Tactic.assumption "assumption")
-    let proof? ← tac e
-    return proof?
+    if let .some prf ← Lean.Meta.findLocalDeclWithType? e then
+      return .some (.fvar prf)
+    else
+      if e.isAppOf ``fpropParam then
+        trace[Meta.Tactic.fprop.unsafe] s!"discharging with sorry: {← ppExpr e}"
+        return .some <| ← mkAppOptM ``sorryProofAxiom #[e.appArg!]
+      else
+        return none
 
 
 open Lean Meta FTrans in
@@ -1140,11 +1158,40 @@ theorem SciLean.EnumType.sum.arg_f.revCDeriv_rule {ι : Type _} [EnumType ι]
 by
   have _ := fun i => (hf i).1
   have _ := fun i => (hf i).2
-  simp [revCDeriv]
+  unfold revCDeriv
   funext x; simp
   ftrans
   sorry_proof
 
+
+-- d/ite -----------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+@[ftrans]
+theorem ite.arg_te.revCDeriv_rule
+  (c : Prop) [dec : Decidable c] (t e : X → Y)
+  : revCDeriv K (fun x => ite c (t x) (e x))
+    =
+    fun y =>
+      ite c (revCDeriv K t y) (revCDeriv K e y) :=
+by
+  induction dec
+  case isTrue h  => ext y <;> simp[h]
+  case isFalse h => ext y <;> simp[h]
+
+@[ftrans]
+theorem dite.arg_te.revCDeriv_rule
+  (c : Prop) [dec : Decidable c]
+  (t : c  → X → Y) (e : ¬c → X → Y)
+  : revCDeriv K (fun x => dite c (t · x) (e · x))
+    =
+    fun y =>
+      dite c (fun p => revCDeriv K (t p) y)
+             (fun p => revCDeriv K (e p) y) :=
+by
+  induction dec
+  case isTrue h  => ext y <;> simp[h]
+  case isFalse h => ext y <;> simp[h]
 
 
 --------------------------------------------------------------------------------
@@ -1179,7 +1226,7 @@ theorem Inner.inner.arg_a0a1.revCDeriv_rule
 by
   have ⟨_,_⟩ := hf
   have ⟨_,_⟩ := hg
-  simp[revCDeriv]
+  unfold revCDeriv
   funext x; simp
   ftrans only
   simp
@@ -1205,6 +1252,28 @@ by
   simp
   ftrans
   simp[smul_smul]
+
+
+@[ftrans]
+theorem SciLean.norm₂.arg_x.revCDeriv_rule
+  (f : X → Y)
+  (hf : HasAdjDiff R f) (hx : fpropParam (∀ x, f x≠0))
+  : (revCDeriv R (fun x => ‖f x‖₂[R]))
+    =
+    fun x =>
+      let ydf := revCDeriv R f x
+      let ynorm := ‖ydf.1‖₂[R]
+      (ynorm,
+       fun dr =>
+         (ynorm⁻¹ * dr) • ydf.2 ydf.1) :=
+by
+  have ⟨_,_⟩ := hf
+  unfold revCDeriv
+  unfold fpropParam at hx
+  ftrans only
+  simp
+  ftrans
+  funext dr; simp[smul_smul]
 
 
 @[ftrans]
@@ -1237,7 +1306,7 @@ end InnerProductSpace
 
 
 @[ftrans]
-theorem SciLean.semiAdjoint.arg_a3.revCDeriv_rule
+theorem SciLean.semiAdjoint.arg_y.revCDeriv_rule
   (f : X → Y) (a0 : W → Y) (hf : HasSemiAdjoint K f) (ha0 : HasAdjDiff K a0)
   : revCDeriv K (fun w => semiAdjoint K f (a0 w))
     =

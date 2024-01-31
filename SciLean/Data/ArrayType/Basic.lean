@@ -1,5 +1,8 @@
 import SciLean.Util.SorryProof
 import SciLean.Data.Index
+import SciLean.Data.ListN 
+import SciLean.Data.StructType.Basic
+import SciLean.Data.Function
 
 namespace SciLean
 
@@ -38,6 +41,7 @@ class ReserveElem (Cont : USize → Type u) (Elem : outParam (Type w)) where
 export ReserveElem (reserveElem)
 attribute [irreducible] reserveElem
 
+
 /-- This class says that `Cont` behaves like an array with `Elem` values indexed by `Idx`
 
 Examples for `Idx = Fin n` and `Elem = ℝ` are: `ArrayN ℝ n` or `ℝ^{n}`
@@ -56,15 +60,13 @@ Alternative notation:
 class ArrayType (Cont : Type u) (Idx : Type v |> outParam) (Elem : Type w |> outParam)
   extends GetElem Cont Idx Elem (λ _ _ => True),
           SetElem Cont Idx Elem,
-          IntroElem Cont Idx Elem
+          IntroElem Cont Idx Elem,
+          StructType Cont Idx (fun _ => Elem)
   where
-  ext : ∀ f g : Cont, (∀ x : Idx, f[x] = g[x]) → f = g
-  getElem_setElem_eq  : ∀ (x : Idx) (y : Elem) (f : Cont), (setElem f x y)[x] = y
-  getElem_setElem_neq : ∀ (i j : Idx) (val : Elem) (arr : Cont), i ≠ j → (setElem arr i val)[j] = arr[j]
-  getElem_introElem : ∀ f i, (introElem f)[i] = f i
+  getElem_structProj   : ∀ (x : Cont) (i : Idx), x[i] = structProj x i
+  setElem_structModify : ∀ (x : Cont) (i : Idx) (xi : Elem), setElem x i xi = structModify i (fun _ => xi) x
+  introElem_structMake : ∀ (f : Idx → Elem), introElem f = structMake f
 
-attribute [ext] ArrayType.ext
-attribute [simp] ArrayType.getElem_setElem_eq ArrayType.getElem_introElem
 attribute [default_instance] ArrayType.toGetElem ArrayType.toSetElem ArrayType.toIntroElem
 
 class LinearArrayType (Cont : USize → Type u) (Elem : Type w |> outParam)
@@ -89,7 +91,36 @@ instance {T} {Y : outParam Type} [inst : LinearArrayType T Y] (n) : ArrayType (T
 
 namespace ArrayType
 
-variable {Cont : Type} {Idx : Type |> outParam} {Elem : Type |> outParam}
+variable 
+  {Cont : Type} {Idx : Type |> outParam} {Elem : Type |> outParam}
+  [ArrayType Cont Idx Elem]
+
+@[ext]
+theorem ext (x y : Cont) : (∀ i, x[i] = y[i]) → x = y := 
+by
+  intros h
+  apply structExt (I:=Idx)
+  simp[getElem_structProj] at h
+  exact h
+
+@[simp] 
+theorem getElem_setElem_eq (i : Idx) (xi : Elem) (x : Cont)
+  : (setElem x i xi)[i] = xi :=
+by
+  simp[setElem_structModify, getElem_structProj]
+
+@[simp] 
+theorem getElem_setElem_neq (i j : Idx) (xi : Elem) (x : Cont)
+  : (i≠j) → (setElem x i xi)[j] = x[j] :=
+by
+  intro h
+  simp (discharger:=assumption) [setElem_structModify, getElem_structProj]
+
+@[simp]
+theorem getElem_introElem (f : Idx → Elem) (i : Idx)
+  : (introElem (Cont:=Cont) f)[i] = f i :=
+by
+  simp[introElem_structMake, getElem_structProj]
 
 @[simp]
 theorem introElem_getElem [ArrayType Cont Idx Elem] (cont : Cont)
@@ -97,17 +128,18 @@ theorem introElem_getElem [ArrayType Cont Idx Elem] (cont : Cont)
 
 -- TODO: Make an inplace modification
 -- Maybe turn this into a class and this is a default implementation
-def modifyElem [GetElem Cont Idx Elem λ _ _ => True] [SetElem Cont Idx Elem]
+def _root_.SciLean.modifyElem [GetElem Cont Idx Elem λ _ _ => True] [SetElem Cont Idx Elem]
   (arr : Cont) (i : Idx) (f : Elem → Elem) : Cont := 
-  setElem arr i (f (arr[i]))
+  let xi := arr[i]
+  setElem arr i (f xi)
 
 @[simp]
 theorem getElem_modifyElem_eq [ArrayType Cont Idx Elem] (cont : Cont) (idx : Idx) (f : Elem → Elem)
-  : (modifyElem cont idx f)[idx] = f cont[idx] := by simp[modifyElem]; done
+  : (modifyElem cont idx f)[idx] = f cont[idx] := by simp[getElem_structProj,modifyElem,setElem_structModify]; done
 
 @[simp]
 theorem getElem_modifyElem_neq [inst : ArrayType Cont Idx Elem] (arr : Cont) (i j : Idx) (f : Elem → Elem)
-  : i ≠ j → (modifyElem arr i f)[j] = arr[j] := by simp[modifyElem]; apply ArrayType.getElem_setElem_neq; done
+  : i ≠ j → (modifyElem arr i f)[j] = arr[j] := by intro h; simp [h,modifyElem, getElem_structProj,modifyElem,setElem_structModify]; done
 
 
 -- Maybe turn this into a class and this is a default implementation
@@ -129,9 +161,9 @@ def map [ArrayType Cont Idx Elem] [EnumType Idx] (f : Elem → Elem) (arr : Cont
 theorem getElem_map [ArrayType Cont Idx Elem] [EnumType Idx] (f : Elem → Elem) (arr : Cont) (i : Idx)
   : (map f arr)[i] = f arr[i] := sorry_proof
 
-instance [ArrayType Cont Idx Elem] [ToString Elem] [EnumType Idx] : ToString (Cont) := ⟨λ x => Id.run do
+instance (priority:=low) [ArrayType Cont Idx Elem] [ToString Elem] [EnumType Idx] : ToString (Cont) := ⟨λ x => Id.run do
   let mut fst := true
-  let mut s := "["
+  let mut s := "⊞["
   for i in fullRange Idx do
     if fst then
       s := s ++ toString x[i]
@@ -140,28 +172,56 @@ instance [ArrayType Cont Idx Elem] [ToString Elem] [EnumType Idx] : ToString (Co
       s := s ++ ", " ++ toString x[i]
   s ++ "]"⟩
 
+/-- Converts array to ArrayType
+
+  WARNING: Does not do what expected for arrays of size bigger or equal then USize.size
+    For example, array of size USize.size is converted to an array of size zero
+  -/
+def _root_.Array.toArrayType {n Elem} (Cont : Type u) [ArrayType Cont (SciLean.Idx n) Elem]
+  (a : Array Elem) (_h : n = a.size.toUSize) : Cont := 
+  introElem fun (i : SciLean.Idx n) => a[i.1]'sorry_proof
+
+/-- Converts ListN to ArrayType
+
+  WARNING: Does not do what expected for lists of size bigger or equal then USize.size
+    For example, array of size USize.size is converted to an array of size zero
+  -/
+def _root_.ListN.toArrayType {n Elem} (Cont : Type) [ArrayType Cont (SciLean.Idx (n.toUSize)) Elem] 
+  (l : ListN Elem n) : Cont := 
+  introElem fun i => l.toArray[i.1.toNat]'sorry_proof
+
+instance {Cont Idx Elem} [ArrayType Cont Idx Elem] [StructType Elem I ElemI] : StructType Cont (Idx×I) (fun (_,i) => ElemI i) where
+  structProj := fun x (i,j) => structProj x[i] j
+  structMake := fun f => introElem fun i => structMake fun j => f (i,j)
+  structModify := fun (i,j) f x => modifyElem x i (fun xi => structModify j f xi)
+  left_inv := by intro x; simp
+  right_inv := by intro x; simp
+  structProj_structModify := by intro x; simp
+  structProj_structModify' := by intro (i,j) (i',j') _ _ h; sorry_proof
+
+
 section Operations
 
   variable [ArrayType Cont Idx Elem] [EnumType Idx] 
 
-  instance [Add Elem] : Add Cont := ⟨λ f g => mapIdx (λ x fx => fx + g[x]) f⟩
-  instance [Sub Elem] : Sub Cont := ⟨λ f g => mapIdx (λ x fx => fx - g[x]) f⟩
-  instance [Mul Elem] : Mul Cont := ⟨λ f g => mapIdx (λ x fx => fx * g[x]) f⟩
-  instance [Div Elem] : Div Cont := ⟨λ f g => mapIdx (λ x fx => fx / g[x]) f⟩
+  instance (priority:=low) [Add Elem] : Add Cont := ⟨λ f g => mapIdx (λ x fx => fx + g[x]) f⟩
+  instance (priority:=low) [Sub Elem] : Sub Cont := ⟨λ f g => mapIdx (λ x fx => fx - g[x]) f⟩
+  instance (priority:=low) [Mul Elem] : Mul Cont := ⟨λ f g => mapIdx (λ x fx => fx * g[x]) f⟩
+  instance (priority:=low) [Div Elem] : Div Cont := ⟨λ f g => mapIdx (λ x fx => fx / g[x]) f⟩
 
-  -- instance {R} [HMul R Elem Elem] : HMul R Cont Cont := ⟨λ r f => map (λ fx => r*(fx : Elem)) f⟩
-  instance {R} [SMul R Elem] : SMul R Cont := ⟨λ r f => map (λ fx => r•(fx : Elem)) f⟩
+  -- instance (priority:=low) {R} [HMul R Elem Elem] : HMul R Cont Cont := ⟨λ r f => map (λ fx => r*(fx : Elem)) f⟩
+  instance (priority:=low) {R} [SMul R Elem] : SMul R Cont := ⟨λ r f => map (λ fx => r•(fx : Elem)) f⟩
 
-  instance [Neg Elem] : Neg Cont := ⟨λ f => map (λ fx => -(fx : Elem)) f⟩
-  instance [Inv Elem] : Inv Cont := ⟨λ f => map (λ fx => (fx : Elem)⁻¹) f⟩
+  instance (priority:=low) [Neg Elem] : Neg Cont := ⟨λ f => map (λ fx => -(fx : Elem)) f⟩
+  instance (priority:=low) [Inv Elem] : Inv Cont := ⟨λ f => map (λ fx => (fx : Elem)⁻¹) f⟩
 
-  instance [One Elem]  : One Cont  := ⟨introElem λ _ : Idx => 1⟩
-  instance [Zero Elem] : Zero Cont := ⟨introElem λ _ : Idx => 0⟩
+  instance (priority:=low) [One Elem]  : One Cont  := ⟨introElem λ _ : Idx => 1⟩
+  instance (priority:=low) [Zero Elem] : Zero Cont := ⟨introElem λ _ : Idx => 0⟩
 
-  instance [LT Elem] : LT Cont := ⟨λ f g => ∀ x, f[x] < g[x]⟩ 
-  instance [LE Elem] : LE Cont := ⟨λ f g => ∀ x, f[x] ≤ g[x]⟩
+  instance (priority:=low) [LT Elem] : LT Cont := ⟨λ f g => ∀ x, f[x] < g[x]⟩ 
+  instance (priority:=low) [LE Elem] : LE Cont := ⟨λ f g => ∀ x, f[x] ≤ g[x]⟩
 
-  instance [DecidableEq Elem] : DecidableEq Cont := 
+  instance (priority:=low) [DecidableEq Elem] : DecidableEq Cont := 
     λ f g => Id.run do
       let mut eq : Bool := true
       for x in fullRange Idx do
@@ -170,7 +230,7 @@ section Operations
           break
       if eq then isTrue sorry_proof else isFalse sorry_proof
 
-  instance [LT Elem] [∀ x y : Elem, Decidable (x < y)] (f g : Cont) : Decidable (f < g) := Id.run do
+  instance (priority:=low) [LT Elem] [∀ x y : Elem, Decidable (x < y)] (f g : Cont) : Decidable (f < g) := Id.run do
     let mut lt : Bool := true
     for x in fullRange Idx do
       if ¬(f[x] < g[x]) then
@@ -178,7 +238,7 @@ section Operations
         break
     if lt then isTrue sorry_proof else isFalse sorry_proof
 
-  instance [LE Elem] [∀ x y : Elem, Decidable (x ≤ y)] (f g : Cont) : Decidable (f ≤ g) := Id.run do
+  instance (priority:=low) [LE Elem] [∀ x y : Elem, Decidable (x ≤ y)] (f g : Cont) : Decidable (f ≤ g) := Id.run do
     let mut le : Bool := true
     for x in fullRange Idx do
       if ¬(f[x] ≤ g[x]) then
@@ -213,11 +273,51 @@ section Operations
 end Operations
 
 @[simp]
-theorem sum_introElem [EnumType Idx] [ArrayType Cont Idx Elem] [AddCommMonoid Elem] {ι} [EnumType ι] (f : ι → Idx → Elem) 
+theorem sum_introElem [EnumType Idx] [ArrayType Cont Idx Elem] [AddCommMonoid Elem] {ι} [EnumType ι] (f : ι → Idx → Elem)
   : ∑ j, introElem (Cont:=Cont) (fun i => f j i)
     =
     introElem fun i => ∑ j, f j i
   := sorry_proof
+
+
+section UsefulFunctions
+
+
+variable 
+  [ArrayType Cont Idx Elem] [Index Idx]
+  [LT Elem] [∀ x y : Elem, Decidable (x < y)] [Inhabited Idx] 
+
+def argMaxCore (cont : Cont ) : Idx × Elem :=
+  Function.reduceD 
+    (fun i => (i,cont[i]))
+    (fun (i,e) (i',e') => if e < e' then (i',e') else (i,e))
+    (default, cont[default])
+
+def max (cont : Cont) : Elem :=
+  Function.reduceD 
+    (fun i => cont[i])
+    (fun e e' => if e < e' then e' else e)
+    (cont[default])
+
+def idxMax (cont : Cont) : Idx := (argMaxCore cont).1
+
+
+def argMinCore (cont : Cont ) : Idx × Elem :=
+  Function.reduceD 
+    (fun i => (i,cont[i]))
+    (fun (i,e) (i',e') => if e' < e then (i',e') else (i,e))
+    (default, cont[default])
+
+def min (cont : Cont) : Elem :=
+  Function.reduceD 
+    (fun i => cont[i])
+    (fun e e' => if e < e' then e' else e)
+    (cont[default])
+
+def idxMin (cont : Cont) : Idx := (argMinCore cont).1
+
+end UsefulFunctions
+
 
 end ArrayType
 
@@ -243,3 +343,4 @@ namespace ArrayType
       else y[⟨i.1-n, sorry_proof⟩]
 
 end ArrayType
+

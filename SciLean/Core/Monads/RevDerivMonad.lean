@@ -364,11 +364,16 @@ def ftransExt : FTransExt where
 
   constRule e X y := do
     let .some K := e.getArg? 0 | return none
+    let .some m := e.getArg? 2 | return none
     let .some m' := e.getArg? 3 | return none
     let .some M' := e.getArg? 5 | return none
     let .some RDM := e.getArg? 6 | return none
+    let .some Y := e.getArg? 8 | return none
 
-    let prf ← mkAppOptM ``const_rule #[K, none, none, m', none, M', RDM, none, X, none, none, none, y]
+
+    let prf ← mkAppOptM ``const_rule #[K, none, m, m', none, M', RDM, none, X, none, Y, none]
+    -- this is a hack to deal with Id monad
+    let prf := prf.app y
 
     tryTheorems
       #[ { proof := prf, origin := .decl ``const_rule, rfl := false} ]
@@ -600,3 +605,57 @@ by
 
   rw [RevDerivMonad.revDerivM_bind _ _ hf hg]
   simp [RevDerivMonad.revDerivM_pair a0 ha0]
+
+
+-------------------------------------------------------------------------------- 
+-- d/ite -----------------------------------------------------------------------
+-------------------------------------------------------------------------------- 
+
+@[fprop]
+theorem ite.arg_te.HasAdjDiffM_rule
+  (c : Prop) [dec : Decidable c] (t e : X → m Y)
+  (ht : HasAdjDiffM K t) (he : HasAdjDiffM K e)
+  : HasAdjDiffM K (fun x => ite c (t x) (e x)) :=
+by
+  induction dec
+  case isTrue h  => simp[ht,h]
+  case isFalse h => simp[he,h]
+
+
+@[ftrans]
+theorem ite.arg_te.revDerivM_rule
+  (c : Prop) [dec : Decidable c] (t e : X → m Y)
+  : revDerivM K (fun x => ite c (t x) (e x))
+    =
+    fun y =>
+      ite c (revDerivM K t y) (revDerivM K e y) := 
+by
+  induction dec
+  case isTrue h  => ext y; simp[h]
+  case isFalse h => ext y; simp[h]
+
+
+@[fprop]
+theorem dite.arg_te.HasAdjDiffM_rule
+  (c : Prop) [dec : Decidable c]
+  (t : c → X → m Y) (e : ¬c → X → m Y)
+  (ht : ∀ h, HasAdjDiffM K (t h)) (he : ∀ h, HasAdjDiffM K (e h))
+  : HasAdjDiffM K (fun x => dite c (fun h => t h x) (fun h => e h x)) :=
+by
+  induction dec
+  case isTrue h  => simp[ht,h]
+  case isFalse h => simp[he,h]
+
+
+@[ftrans]
+theorem dite.arg_te.revDerivM_rule
+  (c : Prop) [dec : Decidable c] 
+  (t : c → X → m Y) (e : ¬c → X → m Y)
+  : revDerivM K (fun x => dite c (fun h => t h x) (fun h => e h x))
+    =
+    fun y =>
+      dite c (fun h => revDerivM K (t h) y) (fun h => revDerivM K (e h) y) := 
+by
+  induction dec
+  case isTrue h  => ext y; simp[h]
+  case isFalse h => ext y; simp[h]
